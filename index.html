@@ -83,15 +83,39 @@
 
     <div class="max-w-xl w-full px-4">
         <h1 class="text-4xl font-extrabold text-primary text-center mb-4 rounded-lg bg-white dark:bg-surface-dark p-3 shadow-lg">
-            Misere (Anti) Tic-Tac-Toe (5x5)
+             Misere (Anti) Tic-Tac-Toe (5x5)
         </h1>
         <p class="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
             The player who completes 3-in-a-row loses the game.
         </p>
-
-        <!-- Mode Selection -->
+        
+        <!-- Time Control Selection (NEW) -->
         <div class="mb-4 p-3 bg-white dark:bg-surface-dark rounded-lg shadow-md">
-            <h2 class="text-lg font-semibold mb-2">Select Game Mode:</h2>
+            <h2 class="text-lg font-semibold mb-2">Select Time Control:</h2>
+            <div class="flex justify-between space-x-2">
+                <button onclick="setTimeMode('Classic')" id="time-classic" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+                <button onclick="setTimeMode('Blitz')" id="time-blitz" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+                <button onclick="setTimeMode('Expansion')" id="time-expansion" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+            </div>
+        </div>
+
+        <!-- Timer Display (Conditional based on Time Mode) -->
+        <div id="timer-display-container" class="flex justify-between items-center w-full mb-4 p-3 bg-white dark:bg-surface-dark rounded-lg shadow-md transition-all duration-300">
+            <div class="flex flex-col items-center transition-transform duration-300 transform" id="x-timer-container">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Player X Time</span>
+                <span id="x-timer" class="text-2xl font-bold text-primary">--:--</span>
+            </div>
+            <div class="text-2xl font-extrabold text-gray-400">BLITZ</div>
+            <div class="flex flex-col items-center transition-transform duration-300 transform" id="o-timer-container">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Player O Time</span>
+                <span id="o-timer" class="text-2xl font-bold text-secondary">--:--</span>
+            </div>
+        </div>
+        <!-- End Timer Display -->
+
+        <!-- Opponent Mode Selection (Existing) -->
+        <div class="mb-4 p-3 bg-white dark:bg-surface-dark rounded-lg shadow-md">
+            <h2 class="text-lg font-semibold mb-2">Select Opponent:</h2>
             <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
                 <button onclick="setGameMode('PvP')" id="mode-pvp" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
                 <button onclick="setGameMode('PvAI')" id="mode-pvai" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
@@ -185,17 +209,32 @@
     <script>
         const BOARD_SIZE = 5;
         const WIN_LENGTH = 3; 
+        
+        // --- BLITZ TIMER CONSTANTS ---
+        const BLITZ_TIME_SECONDS = 5; // CHANGED FROM 10 TO 5
+        let xTimeLeft = BLITZ_TIME_SECONDS;
+        let oTimeLeft = BLITZ_TIME_SECONDS;
+        let timerInterval = null;
+
+        // --- DOM Elements ---
         const boardElement = document.getElementById('board');
         const statusDisplay = document.getElementById('status-display');
         const messageContainer = document.getElementById('message-container');
         const resetButton = document.getElementById('reset-button');
         const aiPlayButton = document.getElementById('ai-play-button');
-        
+        const xTimerDisplay = document.getElementById('x-timer');
+        const oTimerDisplay = document.getElementById('o-timer');
+        const xTimerContainer = document.getElementById('x-timer-container');
+        const oTimerContainer = document.getElementById('o-timer-container');
+        const timerDisplayContainer = document.getElementById('timer-display-container');
+
+        // --- Game State ---
         let gameBoard;
         let currentPlayer = 'X'; 
         let isGameActive = true;
         let turnCount = 0;
-        let gameMode = 'PvAI'; // Default mode
+        let gameMode = 'PvAI'; // Default opponent mode (PvP/PvAI/AvAI)
+        let timeMode = 'Blitz'; // Default time mode (Classic/Blitz/Expansion)
 
         const LOSING_CONDITIONS = [];
         
@@ -265,8 +304,83 @@
             }
         };
         
+        // --- TIMER FUNCTIONS ---
+
+        const formatTime = (seconds) => {
+            const s = String(Math.floor(seconds)).padStart(2, '0');
+            return `00:${s}`;
+        };
+
+        const updateTimerDisplay = () => {
+            xTimerDisplay.textContent = formatTime(xTimeLeft);
+            oTimerDisplay.textContent = formatTime(oTimeLeft);
+
+            // Highlight active player's time
+            xTimerContainer.classList.toggle('scale-110', currentPlayer === 'X');
+            oTimerContainer.classList.toggle('scale-110', currentPlayer === 'O');
+            
+            // Clear previous highlight classes
+            xTimerDisplay.classList.remove('text-red-500', 'animate-pulse');
+            oTimerDisplay.classList.remove('text-red-500', 'animate-pulse');
+
+            // Add blink/red color if time is low
+            if (xTimeLeft <= 3 && currentPlayer === 'X') {
+                xTimerDisplay.classList.add('text-red-500', 'animate-pulse');
+            }
+            if (oTimeLeft <= 3 && currentPlayer === 'O') {
+                oTimerDisplay.classList.add('text-red-500', 'animate-pulse');
+            }
+        };
+
+        const handleTimeExpired = () => {
+            stopTimer();
+            const loser = currentPlayer;
+            const winner = loser === 'X' ? 'O' : 'X';
+            showMessage(
+                `Time Expired! ${loser} Lost.`,
+                `${loser}'s clock ran out. ${winner} wins by time.`,
+                'lose'
+            );
+            endGame(winner, loser);
+        };
+
+        const startTimer = () => {
+            stopTimer(); // Clear any existing interval
+
+            // Timer only runs in Blitz mode and if it's a human turn (not AvAI)
+            if (gameMode !== 'AvAI' && timeMode === 'Blitz') {
+                timerInterval = setInterval(() => {
+                    if (!isGameActive) {
+                        stopTimer();
+                        return;
+                    }
+
+                    if (currentPlayer === 'X') {
+                        xTimeLeft -= 1;
+                        if (xTimeLeft <= 0) {
+                            handleTimeExpired();
+                        }
+                    } else if (currentPlayer === 'O') {
+                        oTimeLeft -= 1;
+                        if (oTimeLeft <= 0) {
+                            handleTimeExpired();
+                        }
+                    }
+                    updateTimerDisplay();
+                }, 1000);
+            }
+        };
+
+        const stopTimer = () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        };
+
         // --- Mode and UI Control ---
 
+        // Controls PvP, PvAI, AvAI
         const setGameMode = (mode) => {
             gameMode = mode;
             const buttons = [
@@ -292,10 +406,53 @@
             aiPlayButton.textContent = `Play AI Turn (${currentPlayer})`;
             
             resetGameState();
-            if (mode === 'AvAI') {
-                updateStatus(`AI vs AI Mode. Click 'Play AI Turn' to begin.`);
-            }
         };
+
+        // Controls Classic, Blitz, Expansion
+        window.setTimeMode = (mode) => {
+            if (mode === 'Expansion') {
+                showMessage(
+                    "Expansion Mode: Work in Progress",
+                    "This mode is glitchy and still under development. Please select Classic or Blitz to play.",
+                    'draw' // Neutral warning color
+                );
+                timeMode = mode;
+                updateTimeModeUI(mode);
+                // Lock the board and display status
+                endGame(null); 
+                updateStatus("Expansion Mode Selected: Work In Progress", 'text-yellow-700 dark:text-yellow-400');
+            } else {
+                timeMode = mode;
+                updateTimeModeUI(mode);
+                resetGameState(); // Restart game with new time settings
+            }
+        }
+        
+        const updateTimeModeUI = (mode) => {
+            // Show/Hide timer display container
+            timerDisplayContainer.style.display = (mode === 'Blitz') ? 'flex' : 'none';
+            
+            // Update button styling
+            const buttons = [
+                { id: 'time-classic', label: 'Classic' },
+                { id: 'time-blitz', label: 'Blitz (5s)' }, // UPDATED LABEL
+                { id: 'time-expansion', label: 'Expansion' },
+            ];
+
+            buttons.forEach(btn => {
+                const element = document.getElementById(btn.id);
+                if (element) {
+                    element.textContent = btn.label;
+                    element.classList.remove('bg-primary', 'text-white', 'hover:bg-indigo-600', 'bg-gray-200', 'text-text-light', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+                    if (btn.id === `time-${mode.toLowerCase()}`) {
+                        element.classList.add('bg-primary', 'text-white', 'hover:bg-indigo-600');
+                    } else {
+                        element.classList.add('bg-gray-200', 'text-text-light', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+                    }
+                }
+            });
+        }
+
 
         const createBoard = () => {
             loadTheme(); // Load theme setting on startup
@@ -310,7 +467,8 @@
                 cell.addEventListener('click', () => handleCellClick(i));
                 boardElement.appendChild(cell);
             }
-            setGameMode(gameMode); 
+            setGameMode(gameMode); // Initializes board and default opponent mode
+            updateTimeModeUI(timeMode); // Initialize Time Mode UI
         };
 
         const resetGameState = () => {
@@ -324,8 +482,34 @@
             isGameActive = true;
             turnCount = 0;
             messageContainer.innerHTML = '';
-            updateStatus(`Turn for ${currentPlayer}`);
-            aiPlayButton.disabled = false;
+            
+            // Blitz Timer Reset
+            xTimeLeft = BLITZ_TIME_SECONDS;
+            oTimeLeft = BLITZ_TIME_SECONDS;
+            updateTimerDisplay();
+
+            // Timer Logic: Only start if Blitz is selected AND not AvAI
+            if (gameMode !== 'AvAI' && timeMode === 'Blitz') {
+                startTimer();
+            } else {
+                stopTimer();
+            }
+            
+            // If Expansion is selected, lock the board
+            if (timeMode === 'Expansion') {
+                boardElement.querySelectorAll('.cell').forEach(cell => cell.classList.add('pointer-events-none'));
+                updateStatus("Expansion Mode Selected: Work In Progress", 'text-yellow-700 dark:text-yellow-400');
+                isGameActive = false;
+            } else {
+                updateStatus(`Turn for ${currentPlayer}`);
+                aiPlayButton.disabled = false;
+            }
+
+            // If AvAI mode is selected, ensure the timer is off and the button is ready
+            if (gameMode === 'AvAI') {
+                stopTimer();
+                updateStatus(`AI vs AI Mode. Click 'Play AI Turn' to begin.`);
+            }
         };
 
         const updateStatus = (message, colorClass = '') => {
@@ -351,14 +535,14 @@
         // --- Game Logic ---
         
         const handleCellClick = (index) => {
-            if (!isGameActive || gameBoard[index] !== null) {
+            if (!isGameActive || gameBoard[index] !== null || timeMode === 'Expansion') {
                 return;
             }
             if (gameMode === 'AvAI') {
                 return; // Ignore clicks in AI vs AI mode
             }
             
-            // X is always the first human player in PvAI
+            // X is the human player in PvAI for their turn
             if (gameMode === 'PvP' || (gameMode === 'PvAI' && currentPlayer === 'X')) {
                 makeMove(index, currentPlayer);
             } else if (gameMode === 'PvAI' && currentPlayer === 'O') {
@@ -382,8 +566,13 @@
 
             // Handle turn transition based on mode
             if (gameMode === 'PvAI' && currentPlayer === 'O') {
+                // The move was made by X, now it's O's turn (AI)
                 updateStatus(`AI's turn (O)...`);
-                setTimeout(aiMoveAggressive, 500); 
+                stopTimer(); // Stop human's timer while AI thinks
+                setTimeout(() => {
+                    aiMoveAggressive();
+                    // makeMove will restart the timer for the new currentPlayer (X) if Blitz
+                }, 500); 
             } else {
                 updateStatus(`Turn for ${currentPlayer}`);
             }
@@ -399,6 +588,20 @@
             setTimeout(() => cell.classList.remove('animate-pulse'), 100);
             
             currentPlayer = player === 'X' ? 'O' : 'X';
+
+            // Timer: Reset time for the player who just moved
+            if (gameMode !== 'AvAI' && timeMode === 'Blitz') {
+                if (player === 'X') {
+                    xTimeLeft = BLITZ_TIME_SECONDS; // Reset X's clock
+                } else {
+                    oTimeLeft = BLITZ_TIME_SECONDS; // Reset O's clock
+                }
+                stopTimer();
+                startTimer(); // Start timer for the new currentPlayer
+                updateTimerDisplay();
+            } else if (timeMode === 'Classic') {
+                 stopTimer(); // Ensure timer is off in classic mode
+            }
         };
         
         const checkLoss = (board, player) => {
@@ -426,21 +629,26 @@
 
         const endGame = (winner, loser = null) => {
             isGameActive = false;
+            stopTimer(); // Stop the timer when the game ends
             boardElement.querySelectorAll('.cell').forEach(cell => cell.classList.add('pointer-events-none'));
             aiPlayButton.disabled = true;
             
-            if (winner) {
+            if (winner && loser) {
+                // Determine if loss was by time or by 3-in-a-row
+                const content = loser === 'X' || loser === 'O' ? `${loser} made a ${WIN_LENGTH}-in-a-row, forcing them to lose.` : `${loser}'s clock ran out.`;
                 const winnerText = `${winner} won!`;
+                
                 showMessage(
                     `Game Over! ${winnerText}`,
-                    `${loser} made a ${WIN_LENGTH}-in-a-row, forcing them to lose.`,
+                    content,
                     'win'
                 );
-                updateStatus(winnerText, winner === 'X' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'); 
-            } else {
+                updateStatus(winnerText, winner === 'X' ? 'text-primary' : 'text-secondary'); 
+            } else if (loser === null && winner === null) {
                 showMessage("It's a Draw!", `The board is full, and no one lost.`, 'draw');
                 updateStatus("Game ended in a Draw.", 'text-yellow-700 dark:text-yellow-400');
             }
+            // If winner is null and loser is provided (e.g., Expansion mode), do nothing.
         };
 
 
@@ -506,10 +714,6 @@
             return (opponentThreats * 1000) - (ownThreats * 10);
         };
 
-        /**
-         * The AI's decision-making process based on aggressive, trap-setting heuristics.
-         * The AI WILL NOT block the opponent's 2-in-a-row unless it results in an immediate win for the AI.
-         */
         const aiMoveAggressive = () => {
             if (!isGameActive) return;
 
