@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5x5 Misere Tic-Tac-Toe (Mode Selector)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // Enable dark mode based on 'dark' class
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#f97316',
+                        // Light Mode Colors
+                        'bg-light': '#f3ffce',
+                        'text-light': '#1f2937',
+                        // Dark Mode Colors
+                        'bg-dark': '#1f2937',
+                        'text-dark': '#e5e7eb',
+                        'surface-dark': '#374151',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Base styles that adapt to dark/light mode */
+        body {
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            aspect-ratio: 1 / 1; 
+            max-width: 500px;
+            width: 90vw;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 0.15s, transform 0.1s;
+            border: 1px solid;
+            @apply border-gray-400 dark:border-gray-600;
+        }
+        /* Color inversion for hover effect in dark mode */
+        .cell:hover:not([data-value]) {
+            @apply bg-gray-200 dark:bg-gray-700;
+        }
+        .cell[data-value="X"] { color: #4f46e5; }
+        .cell[data-value="O"] { color: #f97316; }
+        
+        .message-box {
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 font-sans bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark">
+
+    <!-- Theme Toggle -->
+    <div class="fixed top-4 right-4 z-10">
+        <button id="theme-toggle" class="p-3 rounded-full shadow-lg transition duration-200 bg-white dark:bg-surface-dark text-gray-800 dark:text-gray-200" onclick="toggleTheme()">
+            <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 hidden">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0113.818 21.75c-2.614 0-5.138-.484-7.468-1.478A9.718 9.718 0 012.25 10.252a9.718 9.718 0 017.5-7.748v.003c2.614 0 5.138.484 7.468 1.478A9.718 9.718 0 0121.752 15.002z" />
+            </svg>
+            <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 hidden">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364 1.832l-1.554 1.554M21 12h-2.25m-.151 5.385l-1.554-1.554M12 18v2.25m-6.364-1.832l1.554-1.554M3 12h2.25m.151-5.385l1.554 1.554" />
+            </svg>
+        </button>
+    </div>
+
+    <div class="max-w-xl w-full px-4">
+        <h1 class="text-4xl font-extrabold text-primary text-center mb-4 rounded-lg bg-white dark:bg-surface-dark p-3 shadow-lg">
+            Aggressive Misere Tic-Tac-Toe (5x5)
+        </h1>
+        <p class="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
+            **Losing Condition:** The player who completes 3-in-a-row loses the game.
+        </p>
+
+        <!-- Mode Selection -->
+        <div class="mb-4 p-3 bg-white dark:bg-surface-dark rounded-lg shadow-md">
+            <h2 class="text-lg font-semibold mb-2">Select Game Mode:</h2>
+            <div class="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-4">
+                <button onclick="setGameMode('PvP')" id="mode-pvp" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+                <button onclick="setGameMode('PvAI')" id="mode-pvai" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+                <button onclick="setGameMode('AvAI')" id="mode-avai" class="flex-1 px-4 py-2 text-sm font-medium rounded-full transition duration-150"></button>
+            </div>
+        </div>
+
+        <!-- Status and Message Area -->
+        <div id="status-display" class="text-xl font-semibold text-center mb-6 p-3 bg-white dark:bg-surface-dark rounded-lg shadow-md">
+            Starting Game...
+        </div>
+
+        <div id="message-container" class="mb-6">
+            <!-- Game results appear here -->
+        </div>
+        
+        <!-- Game Board -->
+        <div id="board" class="board bg-white dark:bg-surface-dark rounded-xl overflow-hidden border border-gray-400 dark:border-gray-600">
+            <!-- Cells will be generated by JavaScript -->
+        </div>
+
+        <!-- Controls -->
+        <div class="flex justify-center mt-8 space-x-4">
+            <button id="reset-button" class="px-6 py-3 bg-primary text-white font-bold rounded-full shadow-lg hover:bg-indigo-600 transition duration-200 transform hover:scale-105 active:scale-95">
+                New Game
+            </button>
+            <button id="ai-play-button" style="display: none;" 
+                    class="px-6 py-3 bg-secondary text-white font-bold rounded-full shadow-lg hover:bg-orange-600 transition duration-200 transform hover:scale-105 active:scale-95"
+                    onclick="startAiTurn()">
+                Play AI Turn (X)
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, getDoc, collection, onSnapshot, query, where, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Ensure global variables are available
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth;
+        let userId = null;
+        let isAuthReady = false;
+
+        // Function to initialize Firebase and sign in
+        const initFirebase = async () => {
+            if (firebaseConfig) {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        userId = crypto.randomUUID();
+                    }
+                    isAuthReady = true;
+                });
+
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                }
+            } else {
+                isAuthReady = true;
+                userId = crypto.randomUUID();
+            }
+        };
+
+        initFirebase();
+
+        // Expose necessary variables to the global scope for the main script
+        window.db = db;
+        window.auth = auth;
+        window.getUserId = () => userId;
+        window.isAuthReady = () => isAuthReady;
+
+    </script>
+    
+    <script>
+        const BOARD_SIZE = 5;
+        const WIN_LENGTH = 3; 
+        const boardElement = document.getElementById('board');
+        const statusDisplay = document.getElementById('status-display');
+        const messageContainer = document.getElementById('message-container');
+        const resetButton = document.getElementById('reset-button');
+        const aiPlayButton = document.getElementById('ai-play-button');
+        
+        let gameBoard;
+        let currentPlayer = 'X'; 
+        let isGameActive = true;
+        let turnCount = 0;
+        let gameMode = 'PvAI'; // Default mode
+
+        const LOSING_CONDITIONS = [];
+        
+        const toIndex = (r, c) => r * BOARD_SIZE + c;
+
+        // --- Theme Toggle Logic ---
+        window.toggleTheme = () => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcon(isDark);
+        };
+
+        const updateThemeIcon = (isDark) => {
+            const moon = document.getElementById('moon-icon');
+            const sun = document.getElementById('sun-icon');
+            if (moon && sun) {
+                moon.classList.toggle('hidden', !isDark);
+                sun.classList.toggle('hidden', isDark);
+            }
+        };
+
+        const loadTheme = () => {
+            const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                updateThemeIcon(true);
+            } else {
+                updateThemeIcon(false);
+            }
+        };
+
+
+        // Generates all possible 3-in-a-row lines
+        const generateLosingConditions = () => {
+            if (LOSING_CONDITIONS.length > 0) return;
+            // Horizontal
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c <= BOARD_SIZE - WIN_LENGTH; c++) {
+                    let line = [];
+                    for (let k = 0; k < WIN_LENGTH; k++) line.push(toIndex(r, c + k));
+                    LOSING_CONDITIONS.push(line);
+                }
+            }
+            // Vertical
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                for (let r = 0; r <= BOARD_SIZE - WIN_LENGTH; r++) {
+                    let line = [];
+                    for (let k = 0; k < WIN_LENGTH; k++) line.push(toIndex(r + k, c));
+                    LOSING_CONDITIONS.push(line);
+                }
+            }
+            // Diagonal (Top-Left to Bottom-Right)
+            for (let r = 0; r <= BOARD_SIZE - WIN_LENGTH; r++) {
+                for (let c = 0; c <= BOARD_SIZE - WIN_LENGTH; c++) {
+                    let line = [];
+                    for (let k = 0; k < WIN_LENGTH; k++) line.push(toIndex(r + k, c + k));
+                    LOSING_CONDITIONS.push(line);
+                }
+            }
+            // Diagonal (Top-Right to Bottom-Left)
+            for (let r = 0; r <= BOARD_SIZE - WIN_LENGTH; r++) {
+                for (let c = WIN_LENGTH - 1; c < BOARD_SIZE; c++) {
+                    let line = [];
+                    for (let k = 0; k < WIN_LENGTH; k++) line.push(toIndex(r + k, c - k));
+                    LOSING_CONDITIONS.push(line);
+                }
+            }
+        };
+        
+        // --- Mode and UI Control ---
+
+        const setGameMode = (mode) => {
+            gameMode = mode;
+            const buttons = [
+                { id: 'mode-pvp', label: 'Player vs Player' },
+                { id: 'mode-pvai', label: 'Player vs AI' },
+                { id: 'mode-avai', label: 'AI vs AI' },
+            ];
+
+            buttons.forEach(btn => {
+                const element = document.getElementById(btn.id);
+                if (element) {
+                    element.textContent = btn.label;
+                    element.classList.remove('bg-primary', 'text-white', 'hover:bg-indigo-600', 'bg-gray-200', 'text-text-light', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+                    if (btn.id === `mode-${mode.toLowerCase()}`) {
+                        element.classList.add('bg-primary', 'text-white', 'hover:bg-indigo-600');
+                    } else {
+                        element.classList.add('bg-gray-200', 'text-text-light', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+                    }
+                }
+            });
+
+            aiPlayButton.style.display = (mode === 'AvAI') ? 'block' : 'none';
+            aiPlayButton.textContent = `Play AI Turn (${currentPlayer})`;
+            
+            resetGameState();
+            if (mode === 'AvAI') {
+                updateStatus(`AI vs AI Mode. Click 'Play AI Turn' to begin.`);
+            }
+        };
+
+        const createBoard = () => {
+            loadTheme(); // Load theme setting on startup
+            generateLosingConditions();
+            boardElement.innerHTML = '';
+            gameBoard = Array(BOARD_SIZE * BOARD_SIZE).fill(null);
+
+            for (let i = 0; i < gameBoard.length; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => handleCellClick(i));
+                boardElement.appendChild(cell);
+            }
+            setGameMode(gameMode); 
+        };
+
+        const resetGameState = () => {
+            gameBoard.fill(null);
+            boardElement.querySelectorAll('.cell').forEach(cell => {
+                cell.textContent = '';
+                cell.dataset.value = '';
+                cell.classList.remove('bg-red-200', 'pointer-events-none');
+            });
+            currentPlayer = 'X';
+            isGameActive = true;
+            turnCount = 0;
+            messageContainer.innerHTML = '';
+            updateStatus(`Turn for ${currentPlayer}`);
+            aiPlayButton.disabled = false;
+        };
+
+        const updateStatus = (message, colorClass = '') => {
+            statusDisplay.innerHTML = `<span class="${colorClass}">${message}</span>`;
+            if (gameMode === 'AvAI' && isGameActive) {
+                aiPlayButton.textContent = `Play AI Turn (${currentPlayer})`;
+            }
+        };
+        
+        const showMessage = (title, content, type = 'success') => {
+            const color = type === 'win' ? 'bg-green-100 text-green-700 dark:bg-green-800 dark:text-green-100' : 
+                          type === 'lose' ? 'bg-red-100 text-red-700 dark:bg-red-800 dark:text-red-100' : 
+                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-800 dark:text-yellow-100';
+
+            messageContainer.innerHTML = `
+                <div class="message-box p-4 rounded-lg ${color} font-medium text-center shadow-lg">
+                    <p class="font-bold text-lg mb-1">${title}</p>
+                    <p>${content}</p>
+                </div>
+            `;
+        };
+
+        // --- Game Logic ---
+        
+        const handleCellClick = (index) => {
+            if (!isGameActive || gameBoard[index] !== null) {
+                return;
+            }
+            if (gameMode === 'AvAI') {
+                return; // Ignore clicks in AI vs AI mode
+            }
+            
+            // X is always the first human player in PvAI
+            if (gameMode === 'PvP' || (gameMode === 'PvAI' && currentPlayer === 'X')) {
+                makeMove(index, currentPlayer);
+            } else if (gameMode === 'PvAI' && currentPlayer === 'O') {
+                return; // Wait for AI
+            }
+
+            // The player who just moved is the opposite of currentPlayer
+            const playerJustMoved = currentPlayer === 'O' ? 'X' : 'O';
+            
+            if (checkLoss(gameBoard, playerJustMoved)) {
+                endGame(currentPlayer, playerJustMoved); // The next player (currentPlayer) wins
+                return;
+            }
+
+            turnCount++;
+            
+            if (turnCount === BOARD_SIZE * BOARD_SIZE) {
+                endGame(null); 
+                return;
+            }
+
+            // Handle turn transition based on mode
+            if (gameMode === 'PvAI' && currentPlayer === 'O') {
+                updateStatus(`AI's turn (O)...`);
+                setTimeout(aiMoveAggressive, 500); 
+            } else {
+                updateStatus(`Turn for ${currentPlayer}`);
+            }
+        };
+
+        const makeMove = (index, player) => {
+            gameBoard[index] = player;
+            const cell = boardElement.querySelector(`[data-index="${index}"]`);
+            cell.textContent = player;
+            cell.dataset.value = player;
+            
+            cell.classList.add('animate-pulse');
+            setTimeout(() => cell.classList.remove('animate-pulse'), 100);
+            
+            currentPlayer = player === 'X' ? 'O' : 'X';
+        };
+        
+        const checkLoss = (board, player) => {
+            for (const condition of LOSING_CONDITIONS) {
+                const isLoss = condition.every(index => board[index] === player);
+                if (isLoss) {
+                    if (isGameActive && board === gameBoard) {
+                        condition.forEach(index => {
+                            const cell = boardElement.querySelector(`[data-index="${index}"]`);
+                            cell.classList.add('bg-red-200');
+                        });
+                    }
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        const getAvailableMoves = (board) => {
+            return board
+                .map((val, idx) => ({ val, idx }))
+                .filter(cell => cell.val === null)
+                .map(cell => cell.idx);
+        }
+
+        const endGame = (winner, loser = null) => {
+            isGameActive = false;
+            boardElement.querySelectorAll('.cell').forEach(cell => cell.classList.add('pointer-events-none'));
+            aiPlayButton.disabled = true;
+            
+            if (winner) {
+                const winnerText = `${winner} won!`;
+                showMessage(
+                    `Game Over! ${winnerText}`,
+                    `${loser} made a ${WIN_LENGTH}-in-a-row, forcing them to lose.`,
+                    'win'
+                );
+                updateStatus(winnerText, winner === 'X' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'); 
+            } else {
+                showMessage("It's a Draw!", `The board is full, and no one lost.`, 'draw');
+                updateStatus("Game ended in a Draw.", 'text-yellow-700 dark:text-yellow-400');
+            }
+        };
+
+
+        // --- Aggressive AI Logic (Heuristic-based) ---
+        
+        // Find a move that forces the OPPONENT to lose on the next turn (AI wins)
+        const findWinningMove = (board, player) => {
+            const opponent = player === 'X' ? 'O' : 'X';
+            const availableMoves = getAvailableMoves(board);
+
+            for (const index of availableMoves) {
+                const tempBoard = [...board];
+                tempBoard[index] = player;
+                
+                // If making this move forces a loss for the opponent, it's a winning move for 'player'
+                if (checkLoss(tempBoard, opponent)) {
+                    return index;
+                }
+            }
+            return -1;
+        };
+        
+        /**
+         * Calculates a pressure score: rewards creating opponent threats, penalizes creating own threats.
+         * A higher positive score is better for the AI (more aggressive).
+         */
+        const getPressureScore = (moveIndex, player, board) => {
+            const opponent = player === 'X' ? 'O' : 'X';
+            let ownThreats = 0;
+            let opponentThreats = 0;
+            const tempBoard = [...board];
+            tempBoard[moveIndex] = player;
+
+            for (const condition of LOSING_CONDITIONS) {
+                if (condition.includes(moveIndex)) {
+                    let playerCount = 0;
+                    let opponentCount = 0;
+                    let emptyCount = 0;
+
+                    condition.forEach(index => {
+                        if (tempBoard[index] === player) {
+                            playerCount++;
+                        } else if (tempBoard[index] === opponent) {
+                            opponentCount++;
+                        } else if (tempBoard[index] === null) {
+                            emptyCount++;
+                        }
+                    });
+
+                    // Check for new 2-in-a-row lines for the AI (bad for AI)
+                    if (playerCount === WIN_LENGTH - 1 && emptyCount === 1) {
+                        ownThreats++;
+                    }
+                    
+                    // Check for new 2-in-a-row lines for the Opponent (good for AI - sets a trap)
+                    if (opponentCount === WIN_LENGTH - 1 && emptyCount === 1) {
+                        opponentThreats++;
+                    }
+                }
+            }
+
+            // Reward creating opponent threats (1000) highly, and penalize own threats (10) slightly.
+            return (opponentThreats * 1000) - (ownThreats * 10);
+        };
+
+        /**
+         * The AI's decision-making process based on aggressive, trap-setting heuristics.
+         * The AI WILL NOT block the opponent's 2-in-a-row unless it results in an immediate win for the AI.
+         */
+        const aiMoveAggressive = () => {
+            if (!isGameActive) return;
+
+            const A_PLAYER = currentPlayer; 
+            const OPPONENT = A_PLAYER === 'X' ? 'O' : 'X';
+            const availableMoves = getAvailableMoves(gameBoard);
+
+            // 1. Highest Priority: Filter for SAFE moves (moves that do NOT cause A to lose immediately).
+            let safeMoves = availableMoves.filter(index => {
+                const tempBoard = [...gameBoard];
+                tempBoard[index] = A_PLAYER;
+                return !checkLoss(tempBoard, A_PLAYER);
+            }); 
+
+            // Handle forced loss scenario
+            if (safeMoves.length === 0) {
+                if (availableMoves.length > 0) {
+                    // AI is forced to lose, pick a random move from all available moves.
+                    const bestMoveIndex = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                    makeMove(bestMoveIndex, A_PLAYER);
+                    endGame(OPPONENT, A_PLAYER); 
+                    return;
+                }
+                turnCount++;
+                if (turnCount === BOARD_SIZE * BOARD_SIZE) endGame(null);
+                return;
+            }
+            
+            let bestMoveIndex = -1;
+
+            // 2. Immediate Win Check (Is there a move that forces the OPPONENT to lose?)
+            const winningMove = findWinningMove(gameBoard, A_PLAYER);
+            if (winningMove !== -1 && safeMoves.includes(winningMove)) {
+                bestMoveIndex = winningMove;
+            } else {
+                // 3. Aggressive Pressure: Find the safe move that maximizes opponent threats (the trap setting)
+                let maxPressureScore = -Infinity;
+                const highPressureMoves = [];
+
+                safeMoves.forEach(index => {
+                    const score = getPressureScore(index, A_PLAYER, gameBoard);
+                    
+                    if (score > maxPressureScore) {
+                        maxPressureScore = score;
+                        highPressureMoves.length = 0; 
+                        highPressureMoves.push(index);
+                    } else if (score === maxPressureScore) {
+                        highPressureMoves.push(index); 
+                    }
+                });
+
+                // Choose a random move from the best scoring moves (moves that set the best traps)
+                bestMoveIndex = highPressureMoves[Math.floor(Math.random() * highPressureMoves.length)];
+            }
+            
+            makeMove(bestMoveIndex, A_PLAYER);
+            
+            // Check if the AI's move forced the OPPONENT to lose
+            const playerJustMoved = A_PLAYER;
+            const winner = currentPlayer; 
+            if (checkLoss(gameBoard, OPPONENT)) {
+                 endGame(playerJustMoved, OPPONENT); 
+                 return;
+            }
+
+            turnCount++;
+            
+            if (turnCount === BOARD_SIZE * BOARD_SIZE) {
+                endGame(null); 
+                return;
+            }
+            
+            updateStatus(`Turn for ${currentPlayer}`);
+            aiPlayButton.disabled = false;
+            
+            // If AvAI mode, automatically trigger the next turn for a fluid game flow
+            if (gameMode === 'AvAI') {
+                setTimeout(startAiTurn, 500);
+            }
+        };
+
+        // --- AI vs AI Handler ---
+
+        window.startAiTurn = () => {
+            if (!isGameActive) return;
+            aiPlayButton.disabled = true;
+            
+            updateStatus(`AI (${currentPlayer}) is thinking...`);
+            
+            // Run AI move after a slight delay for visual effect
+            setTimeout(aiMoveAggressive, 200);
+        }
+
+        // --- Event Listeners and Startup ---
+        resetButton.addEventListener('click', resetGameState);
+        window.onload = createBoard;
+        
+    </script>
+</body>
+</html>
